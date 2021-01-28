@@ -40,7 +40,8 @@ async function playqueue(firstVideo, message, Discord, serverQueue, voiceChannel
             connection: null, 
             songs: [],
             volume: 100,
-            playing: true
+            playing: true,
+            loop: false
         }
         queue.set(message.guild.id, queueConstruct);
 
@@ -58,12 +59,12 @@ async function playqueue(firstVideo, message, Discord, serverQueue, voiceChannel
 
     } else {
         serverQueue.songs.push(song);
-        return messageEmbed("GREEN", `**[${song.songauthor} | ${song.title}](${song.url})** has been added to the queue. [<@!${song.authorid}>]`, message, Discord)
+        return messageEmbed("GREEN", `**[${song.songauthor}](${song.channel}) | [${song.title}](${song.url})** [<@!${song.authorid}>] has been added to the queue. [<@!${song.authorid}>]`, message, Discord)
     }
 }
 
 async function music(message, args, client, Discord) {
-    const serverQueue = queue.get(message.guild.id);
+    let serverQueue = queue.get(message.guild.id);
     let searchString = message.content.split(" ").slice(2).join(" ");
     if (searchString.startsWith("<") && searchString.endsWith(">")) searchString = searchString.substring(1, searchString.length-1);
     if (serverQueue && client.guilds.cache.get(message.guild.id).voice.channel.id !== message.member.voice.channel.id && commands(args)) return messageEmbed("RED", "You need to be in the same voice channel as me in order to use my commands!", message, Discord);
@@ -90,7 +91,8 @@ async function music(message, args, client, Discord) {
                 message.channel.send(`\`\`\`diff\n${vidAr.join("\n")}\n-Type one of the numbers to pick a song. Type "stop" to stop.\`\`\``);
                 const collector = new Discord.MessageCollector(message.channel, m => m.author.id === message.author.id, { time: 60000 });
                 await collector.on('collect', async message2 => {
-                    if (message2.content === "stop") collector.stop('reason');
+                    if (message2.content.toLowerCase().startsWith("e.music")) messageEmbed("RED", "You must either choose one of those numbers or type `stop` before you can do other commands");
+                    else if (message2.content === "stop") collector.stop('reason');
                     else if (isNaN(message2)) messageEmbed("RED", `You must choose one of those numbers!`, message2, Discord);
                     else if (0 > message2.content || 5 < message2.content) messageEmbed("RED", `You must choose a number between 1 and 5!`, message2, Discord);
                     else {
@@ -113,10 +115,11 @@ async function music(message, args, client, Discord) {
             }
         }
         
+    } else if (!serverQueue) {
+        return messageEmbed("RED", 'There is nothing in the queue right now!', message, Discord);
     } else if (args[1] === "queue") {
         let queueArray = [];
         let queuelength = 0;
-        if (!serverQueue) return messageEmbed("RED", 'There is nothing in the queue right now!', message, Discord);
         for (var i = 0; i < serverQueue.songs.length; i++) {
             queuelength += Number(serverQueue.songs[i].slength);
             queueArray.push(`+ ${i+1}) ${serverQueue.songs[i].songauthor} | ${serverQueue.songs[i].title} - ${new Date(serverQueue.songs[i].slength*1000).toISOString().substr(11, 8)} - ${serverQueue.songs[i].authortag}`);
@@ -125,42 +128,43 @@ async function music(message, args, client, Discord) {
                 queueArray.push(`+ ${i+1}) ${serverQueue.songs[i].songauthor} | ${serverQueue.songs[i].title} - ${new Date(serverQueue.songs[i].slength*1000).toISOString().substr(11, 8)} - ${serverQueue.songs[i].authortag} <-- Current Song`);
             }
         }
-        message.channel.send(`\`\`\`diff\n${queueArray.join("\n")}\n- This is the end of the queue! Do e.play [yt link] to add more songs! \n- The length of the queue is ${new Date(queuelength*1000).toISOString().substr(11, 8)}\`\`\``);
+        message.channel.send(`\`\`\`diff\n${queueArray.join("\n")}\n- This is the end of the queue! Do e.play [yt link] to add more songs! Loop is currently set to '${serverQueue.loop}'\n- The length of the queue is ${new Date(queuelength*1000).toISOString().substr(11, 8)}\`\`\``);
     } else if (args[1] === "pause") {
-        if (!message.member.voice.channel) return messageEmbed("RED", "You need to be in a voice channel in order to stop the music!", message, message, Discord);
-        if (!serverQueue) return messageEmbed("RED", 'There is nothing playing right now!', message, Discord);
         if (!serverQueue.playing) return messageEmbed("RED", `Music is already playing!`, message, Discord);
         serverQueue.playing = false;
         serverQueue.connection.dispatcher.pause();
         messageEmbed("GREEN", `I have paused the music (**[${serverQueue.songs[0].title}](${serverQueue.songs[0].url})** [<@!${serverQueue.songs[0].authorid}>])`, message, Discord);
     } else if (args[1] === "skip") {
-        if (!message.member.voice.channel) return messageEmbed("RED", "You must be in a voice channel to skip!", message, message, Discord);
-        else if (!serverQueue) return messageEmbed("RED", "There is nothing playing right now!", message, Discord);
         serverQueue.connection.dispatcher.end();
         messageEmbed("GREEN", `I have skipped the music. (**[${serverQueue.songs[0].title}](${serverQueue.songs[0].url})** [<@!${serverQueue.songs[0].authorid}>])`, message, Discord);
     } else if (args[1] === "resume") {
-        if (!message.member.voice.channel) return messageEmbed("RED", "You need to be in a voice channel in order to stop the music!", message, message, Discord);
-        if (!serverQueue) return messageEmbed("RED", 'There is nothing playing right now!', message, Discord);
         if (serverQueue.playing) return messageEmbed("RED", `Music is already playing!`, message, Discord);
         serverQueue.playing = true;
         serverQueue.connection.dispatcher.resume();
         messageEmbed("GREEN", `Music resumed (**[${serverQueue.songs[0].title}](${serverQueue.songs[0].url})** [<@!${serverQueue.songs[0].authorid}>])`, message, Discord);
     } else if (args[1] === "disconnect") {
-        if (!message.member.voice.channel) return messageEmbed("RED", "You need to be in a voice channel in order to stop the music!", message, message, Discord);
-        if (!serverQueue) return messageEmbed("RED", 'There is nothing playing right now!', message, Discord);
         serverQueue.connection.dispatcher.end();
         serverQueue.voiceChannel.leave();
         queue.delete(message.guild.id);
         messageEmbed("GREEN", "Disconnected", message, Discord);
     } else if (args[1] === "volume") {
-        if (!message.member.voice.channel) return messageEmbed("RED", "You need to be in a voice channel in order to change the volume!", message, message, Discord);
-        if (!serverQueue) return messageEmbed("RED", 'There is nothing playing right now!', message, Discord);
         if (isNaN(args[2]) || args[2] > 100 || args[2] < 0) return messageEmbed("RED", `'${args[2]}' is either not a number or bigger than 100 or less than 0!`, message, Discord);
         if (!args[2]) return messageEmbed("GREEN", `The volume is at ${serverQueue.volume}/100`, message, Discord);
         serverQueue.volume = args[2];
         serverQueue.connection.dispatcher.setVolumeLogarithmic(args[2]/100);
         messageEmbed("GREEN", `You have successfully set the volume to ${serverQueue.volume}/100`, message, Discord);
+    } else if (args[1] === "loop") {
+        if (serverQueue.loop) serverQueue.loop = false;
+        else serverQueue.loop = true;
+        messageEmbed("GREEN", `You have set loop to \`${serverQueue.loop}\`.`, message, Discord);
     }
+    // else if (args[1] === "remove") {
+    //     if (!serverQueue) return messageEmbed("RED", 'There is nothing playing right now!', message, Discord);
+    //     if (isNaN(args[2]) || args[2] > serverQueue.songs.length || args[2] <= 0) return messageEmbed("RED", `'${args[2]}' is either not a number or bigger than the serverqueue or less than 0!`, message, Discord);
+    //     let song1 = await serverQueue.songs[args[2]-1];
+    //     serverQueue = await serverQueue.songs.slice(args[2]-2, args[2]-1);
+    //     await messageEmbed("GREEN", `You have successfully removed the song **[${song1.songauthor}](${song1.channel}) | [${song1.title}](${song1.url})**`, message, Discord);
+    // }
 }
 
 async function play(guild, song, message, Discord) {
@@ -177,7 +181,7 @@ async function play(guild, song, message, Discord) {
 
     const dispatcher = await serverQueue.connection.play(await ytdl(song.url, { highWaterMark: 1024 * 1024 * 100 }), { type: 'opus' })
             .on('finish', () => {
-                serverQueue.songs.shift();
+                if (!serverQueue.loop) serverQueue.songs.shift();
                 play(guild, serverQueue.songs[0], message, Discord);
             })
             .on('error', async error => {
