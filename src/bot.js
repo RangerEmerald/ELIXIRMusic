@@ -14,10 +14,10 @@ client.on('ready', () => {
 client.on('message', message => {
     if (message.author.bot) return; 
     else if (message.content.toLowerCase().startsWith(prefix2)) {
-        const args = message.content.toLowerCase().slice(prefix2.length).split(" ");
+        const args = message.content.toLowerCase().replace(/\s+/g,' ').trim().slice(prefix2.length).split(" ");
         music(message, args, client, Discord);
     } else if (message.content.toLowerCase().startsWith(prefix)) {
-        const args = message.content.toLowerCase().slice(prefix.length).split(" ");
+        const args = message.content.toLowerCase().replace(/\s+/g,' ').trim().slice(prefix.length).split(" ");
         music(message, args, client, Discord);
     }
 });
