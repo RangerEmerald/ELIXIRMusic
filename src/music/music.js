@@ -36,7 +36,7 @@ async function playqueue(firstVideo, message, Discord, serverQueue, voiceChannel
             songs: [],
             volume: 100,
             playing: true,
-            loop: false
+            loop: "none"
         }
         queue.set(message.guild.id, queueConstruct);
 
@@ -54,18 +54,19 @@ async function playqueue(firstVideo, message, Discord, serverQueue, voiceChannel
 
     } else {
         serverQueue.songs.push(song);
-        return messageEmbed("GREEN", `**[${song.songauthor}](${song.channel}) | [${song.title}](${song.url})** [<@!${song.authorid}>] has been added to the queue. [<@!${song.authorid}>]`, message, Discord)
+        return messageEmbed("GREEN", `**[${song.songauthor}](${song.channel}) | [${song.title}](${song.url})** has been added to the queue. [<@!${song.authorid}>]`, message, Discord)
     }
 }
 
 async function music(message, args, client, Discord) {
-    const commands = args[0] === "music" && (args[1] === "play" || args[1] === "pause" || args[1] === "resume" || args[1] === "disconnect" || args[1] === "skip" || args[1] === "volume" || args[1] === "queue" || args[1] === "remove");
+    const commands = (args[0] === "music" || args[0] === "m") && (args[1] === "play" || args[1] === "pause" || args[1] === "resume" || args[1] === "disconnect" || args[1] === "skip" || args[1] === "volume" || args[1] === "queue" || args[1] === "remove" || args[1] === "p" || args[1] === "q" || args[1] === "v" || args[1] === "d" || args[1] === "paws" || args[1] === "res" || args[1] === "s" || args[1] === "r" || args[1] === "p" || args[1] === "l" || args[1] === "replace" || args[1] === "rep");
     let serverQueue = queue.get(message.guild.id);
     let searchString = message.content.replace(/\s+/g,' ').trim().split(" ").slice(2).join(" ");
     if (searchString.startsWith("<") && searchString.endsWith(">")) searchString = searchString.substring(1, searchString.length-1);
     if (!commands || messageCollectorMap.get(message.author.id)) return;
-    else if (!serverQueue && args[1] !== "play") return messageEmbed("RED", 'There is nothing in the queue right now!', message, Discord);
-    else if (args[1] === "queue") {
+    else if (commands && messageCollectorMap.get(message.author.id)) return await messageEmbed("RED", "Please be patient . . . fetching data from Youtube API.", message, Discord);
+    else if (!serverQueue && args[1] !== "play" && args[1] !== "p") return messageEmbed("RED", 'There is nothing in the queue right now!', message, Discord);
+    else if (args[1] === "queue" || args[1] === "q") {
         let includesLive = false;
         let queueArray = [];
         let queuelength = 0;
@@ -86,20 +87,22 @@ async function music(message, args, client, Discord) {
         if (includesLive) times = "∞";
         message.channel.send(`\`\`\`diff\n${queueArray.join("\n")}\n- This is the end of the queue! Do e.play [yt link] to add more songs! Loop is currently set to '${serverQueue.loop}'\n- The length of the queue is ${times} long\`\`\``);
     } else if (serverQueue && client.guilds.cache.get(message.guild.id).voice.channel.id !== message.member.voice.channel.id && commands(args)) return messageEmbed("RED", "You need to be in the same voice channel as me in order to use my commands!", message, Discord);
-    else if (args[1] === "play") {
+    else if (args[1] === "play" || args[1] === "p") {
         const voiceChannel = message.member.voice.channel;
         if (!voiceChannel) return messageEmbed("RED", "You must first be in a voice channel!", message, Discord);
 
         const permissions = voiceChannel.permissionsFor(message.client.user);
         if (!permissions.has('CONNECT')) return messageEmbed("RED", "I do not have permission to connect to that voice channel!", message, Discord);
         else if (!permissions.has('SPEAK')) return messageEmbed("RED", "I do not have permission to speak in that voice channel!", message, Discord);
-        
+        else if (!args[2]) return messageEmbed("RED", `You need to include either a youtube link or the song name!`, message, Discord);
+
         let firstVideo = null;
         try {
             firstVideo = await ytdl.getInfo(searchString);
             playqueue(firstVideo, message, Discord, serverQueue, voiceChannel);
         } catch {
             try {
+                messageCollectorMap.set(message.author.id, true);
                 const vidAr = [];
                 var videos = await youtube.searchVideos(searchString, 5);
                 for (var i = 0; i < 5; i++) {
@@ -109,7 +112,6 @@ async function music(message, args, client, Discord) {
                     vidAr.push(`+ ${i+1}) ${vid2.player_response.videoDetails.author} | ${vid2.player_response.videoDetails.title} - ${slength}`);
                 }
                 message.channel.send(`\`\`\`diff\n${vidAr.join("\n")}\n-Type one of the numbers to pick a song. Type "stop" to stop.\`\`\``);
-                messageCollectorMap.set(message.author.id, true);
                 const collector = new Discord.MessageCollector(message.channel, m => m.author.id === message.author.id, { time: 60000 });
                 await collector.on('collect', async message2 => {
                     if (message2.content.toLowerCase().startsWith("e.music")) messageEmbed("RED", "You must either choose one of those numbers or type `stop` before you can do other commands", message, Discord);
@@ -134,43 +136,51 @@ async function music(message, args, client, Discord) {
             }
         }
         
-    } else if (args[1] === "pause") {
+    } else if (args[1] === "pause" || args[1] === "paws") {
         if (!serverQueue.playing) return messageEmbed("RED", `Music is already playing!`, message, Discord);
         serverQueue.playing = false;
         serverQueue.connection.dispatcher.pause();
-        messageEmbed("GREEN", `I have paused the music (**[${serverQueue.songs[0].title}](${serverQueue.songs[0].url})** [<@!${serverQueue.songs[0].authorid}>])`, message, Discord);
-    } else if (args[1] === "skip") {
+        messageEmbed("GREEN", `I have paused the music **[${serverQueue.songs[0].songauthor}](${serverQueue.songs[0].channel}) | [${serverQueue.songs[0].title}](${serverQueue.songs[0].url}** [<@!${serverQueue.songs[0].authorid}>])`, message, Discord);
+    } else if (args[1] === "skip" || args[1] === "s") {
         serverQueue.connection.dispatcher.end();
-        messageEmbed("GREEN", `I have skipped the music. (**[${serverQueue.songs[0].title}](${serverQueue.songs[0].url})** [<@!${serverQueue.songs[0].authorid}>])`, message, Discord);
-    } else if (args[1] === "resume") {
+        messageEmbed("GREEN", `I have skipped **[${serverQueue.songs[0].songauthor}](${serverQueue.songs[0].channel}) | [${serverQueue.songs[0].title}](${serverQueue.songs[0].url})** [<@!${serverQueue.songs[0].authorid}>]`, message, Discord);
+    } else if (args[1] === "resume" || args[1] === "res") {
         if (serverQueue.playing) return messageEmbed("RED", `Music is already playing!`, message, Discord);
         serverQueue.playing = true;
         serverQueue.connection.dispatcher.resume();
-        messageEmbed("GREEN", `Music resumed (**[${serverQueue.songs[0].title}](${serverQueue.songs[0].url})** [<@!${serverQueue.songs[0].authorid}>])`, message, Discord);
-    } else if (args[1] === "disconnect") {
+        messageEmbed("GREEN", `Music resumed **[${serverQueue.songs[0].songauthor}](${serverQueue.songs[0].channel}) | [${serverQueue.songs[0].title}](${serverQueue.songs[0].url}** [<@!${serverQueue.songs[0].authorid}>])`, message, Discord);
+    } else if (args[1] === "disconnect" || args[1] === "d") {
         serverQueue.connection.dispatcher.end();
         serverQueue.voiceChannel.leave();
         queue.delete(message.guild.id);
         messageEmbed("GREEN", "Disconnected", message, Discord);
-    } else if (args[1] === "volume") {
+    } else if (args[1] === "volume" || args[1] === "v") {
         if (!args[2]) return messageEmbed("GREEN", `The volume is at ${serverQueue.volume}/100`, message, Discord);
         if (isNaN(args[2]) || args[2] > 100 || args[2] < 0) return messageEmbed("RED", `'${args[2]}' is either not a number or bigger than 100 or less than 0!`, message, Discord);
         serverQueue.volume = args[2];
         serverQueue.connection.dispatcher.setVolumeLogarithmic(args[2]/100);
         messageEmbed("GREEN", `You have successfully set the volume to ${serverQueue.volume}/100`, message, Discord);
-    } else if (args[1] === "loop") {
-        if (serverQueue.loop) serverQueue.loop = false;
-        else serverQueue.loop = true;
+    } else if (args[1] === "loop" || args[1] === "l") {
+        if (args[2] && (args[2] === "none" || args[2] === "queue" || args[2] === "song")) serverQueue.loop = args[2];
+        else if (serverQueue.loop === "none") serverQueue.loop = "queue";
+        else if (serverQueue.loop === "queue") serverQueue.loop = "song";
+        else if (serverQueue.loop === "song") serverQueue.loop = "none";
         messageEmbed("GREEN", `You have set loop to \`${serverQueue.loop}\`.`, message, Discord);
-    } else if (args[1] === "remove") {
-        if (!serverQueue) return messageEmbed("RED", 'There is nothing playing right now!', message, Discord);
-        if (!args[2]) return messageEmbed("RED", "You must include a number between 1 and 5!");
+    } else if (args[1] === "remove" || args[1] === "r") {
+        if (!args[2]) return messageEmbed("RED", "You must include a number!");
         if (isNaN(args[2]) || args[2] > serverQueue.songs.length || args[2] <= 0) return messageEmbed("RED", `'${args[2]}' is either not a number or bigger than the serverqueue or less than 0!`, message, Discord);
         let song1 = await serverQueue.songs[args[2]-1];
-        serverQueue.songs = await serverQueue.songs.splice(args[2]-2, args[2]-1);
+        serverQueue.songs = await serverQueue.songs.splice(args[2]-1, 1);
         await messageEmbed("GREEN", `You have successfully removed the song **[${song1.songauthor}](${song1.channel}) | [${song1.title}](${song1.url})**`, message, Discord);
         if (serverQueue.songs.length < 1) serverQueue.connection.dispatcher.end();
-    }
+    } 
+    // else if (args[1] === "replace" || args[1] === "rep") {
+    //     if (!args[2]) return messageEmbed("RED", "You must include a number!");
+    //     if (isNaN(args[2]) || args[2] > serverQueue.songs.length || args[2] <= 0) return messageEmbed("RED", `'${args[2]}' is either not a number or bigger than the serverqueue or less than 0!`, message, Discord);
+    //     if (args[2] === 1) {
+
+    //     }
+    // }
 }
 
 async function play(guild, song, message, Discord) {
@@ -184,9 +194,19 @@ async function play(guild, song, message, Discord) {
         } catch (err) { }
         return;
     }
-    dispatcher = await serverQueue.connection.play(await ytdl(song.url, { highWaterMark: 1024 * 1024 * 100 }), { type: 'opus' })
+    dispatcher = await serverQueue.connection.play(await ytdl(song.url, { highWaterMark: 1024 * 1024 * 150 }), { type: 'opus' })
             .on('finish', () => {
-                if (!serverQueue.loop) serverQueue.songs.shift();
+                switch (serverQueue.loop) {
+                    case "none":
+                        serverQueue.songs.shift();
+                        break;
+                    case "queue":
+                        serverQueue.songs.push(serverQueue.songs[0]);
+                        serverQueue.songs.shift();
+                        break;
+                    case "song": 
+                        break;
+                }
                 play(guild, serverQueue.songs[0], message, Discord);
             })
             .on('error', async error => {
