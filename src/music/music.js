@@ -1,8 +1,11 @@
 const ytdl = require('ytdl-core-discord');
+const ytpl = require('ytpl')
 const Youtube = require('simple-youtube-api');
 
 let youtube = new Youtube(process.env.YOUTUBE_API_KEY);
 let backupyoutube = new Youtube(process.env.BACKUP_YOUTUBE_API_KEY);
+
+const { deletefrom, addDatabase, returnPlaylists, cacheQueue } = require('../SQLQueries/queries');
 
 const queue = new Map();
 const messageCollectorMap = new Map();
@@ -16,7 +19,7 @@ async function messageEmbed(color, whatmsg, message, Discord) {
 }
 
 async function playqueue(firstVideo, message, Discord, serverQueue, voiceChannel) {
-    song = {
+    let song = {
         id: firstVideo.player_response.videoDetails.videoId,
         title: firstVideo.player_response.videoDetails.title,
         url: `https://www.youtube.com/watch?v=${firstVideo.player_response.videoDetails.videoId}`,
@@ -28,7 +31,7 @@ async function playqueue(firstVideo, message, Discord, serverQueue, voiceChannel
         authortag: message.member.user.tag
     }
 
-    if (!serverQueue || serverQueue.songs.length < 1) {
+    if (!serverQueue || !serverQueue.songs.length) {
         const queueConstruct = {
             textChannel: message.channel,
             voiceChannel: voiceChannel,
@@ -38,13 +41,13 @@ async function playqueue(firstVideo, message, Discord, serverQueue, voiceChannel
             playing: true,
             loop: "none"
         }
-        queue.set(message.guild.id, queueConstruct);
 
         queueConstruct.songs.push(song);
 
         try {
             var connection = await voiceChannel.join();
-            queueConstruct.connection = connection;
+            queueConstruct.connection = await connection;
+            queue.set(message.guild.id, queueConstruct);
             play(message.guild, queueConstruct.songs[0], message, Discord);
         } catch (err) {
             console.log(`There was an error connecting in a voice channel --- ${err}`);
@@ -59,13 +62,14 @@ async function playqueue(firstVideo, message, Discord, serverQueue, voiceChannel
 }
 
 async function music(message, args, client, Discord) {
-    const commands = (args[0] === "music" || args[0] === "m") && (args[1] === "play" || args[1] === "pause" || args[1] === "resume" || args[1] === "disconnect" || args[1] === "skip" || args[1] === "volume" || args[1] === "queue" || args[1] === "remove" || args[1] === "p" || args[1] === "q" || args[1] === "v" || args[1] === "d" || args[1] === "paws" || args[1] === "res" || args[1] === "s" || args[1] === "r" || args[1] === "p" || args[1] === "l" || args[1] === "replace" || args[1] === "rep");
+    const commands = (args[0] === "music" || args[0] === "m") && (args[1] === "play" || args[1] === "pause" || args[1] === "resume" || args[1] === "disconnect" || args[1] === "skip" || args[1] === "volume" || args[1] === "queue" || args[1] === "remove" || args[1] === "p" || args[1] === "q" || args[1] === "v" || args[1] === "d" || args[1] === "paws" || args[1] === "res" || args[1] === "s" || args[1] === "r" || args[1] === "p" || args[1] === "l" || args[1] === "replace" || args[1] === "rep" || args[1] === "savequeue" || args[1] === "sq" || args[1] === "savedplaylist" || args[1] === "sp" || args[1] === "deleteplaylist" || args[1] === "dp");
+    let unlowerArgs = message.content.replace(/\s+/g,' ').trim().split(" ").slice(1);
     let serverQueue = queue.get(message.guild.id);
     let searchString = message.content.replace(/\s+/g,' ').trim().split(" ").slice(2).join(" ");
     if (searchString.startsWith("<") && searchString.endsWith(">")) searchString = searchString.substring(1, searchString.length-1);
     if (!commands || messageCollectorMap.get(message.author.id)) return;
     else if (commands && messageCollectorMap.get(message.author.id)) return await messageEmbed("RED", "Please be patient . . . fetching data from Youtube API.", message, Discord);
-    else if (!serverQueue && args[1] !== "play" && args[1] !== "p") return messageEmbed("RED", 'There is nothing in the queue right now!', message, Discord);
+    else if ((!serverQueue || (serverQueue && !serverQueue.songs.length)) && args[1] !== "play" && args[1] !== "p" && args[1] !== "savedplaylist" && args[1] !== "sp" && args[1] === "deleteplaylist" && args[1] === "dp") return messageEmbed("RED", 'There is nothing in the queue right now!', message, Discord);
     else if (args[1] === "queue" || args[1] === "q") {
         let includesLive = false;
         let queueArray = [];
@@ -95,11 +99,30 @@ async function music(message, args, client, Discord) {
         if (!permissions.has('CONNECT')) return messageEmbed("RED", "I do not have permission to connect to that voice channel!", message, Discord);
         else if (!permissions.has('SPEAK')) return messageEmbed("RED", "I do not have permission to speak in that voice channel!", message, Discord);
         else if (!args[2]) return messageEmbed("RED", `You need to include either a youtube link or the song name!`, message, Discord);
-
+        
         let firstVideo = null;
         try {
-            firstVideo = await ytdl.getInfo(searchString);
-            playqueue(firstVideo, message, Discord, serverQueue, voiceChannel);
+            if (searchString.includes("youtube.com/playlist")) {
+                const playlist = await ytpl(searchString);
+                for (var i = 0; i < playlist.items.length; i++) {
+                    let serverQueue = queue.get(message.guild.id);
+                    await playqueue(await ytdl.getInfo(playlist.items[i].id), message, Discord, serverQueue, voiceChannel);
+                }
+                return;
+            } else if (searchString.length == 24 && !searchString.includes(' ')) {
+                const result = cacheQueue.get(searchString);
+                if (result) {
+                    const songs = JSON.parse(result.queue);
+                    messageEmbed("GREEN", `Now playing playlist **${result.name} | ${searchString}** saved by **${message.author.tag}**`, message, Discord);
+                    for (i in songs) {
+                        let serverQueue = queue.get(message.guild.id);
+                        await playqueue(await ytdl.getInfo(songs[i]), message, Discord, serverQueue, voiceChannel);
+                    }
+                } else return message.channel.send(`You don't own a playlist with the id \`${searchString}\`!`);
+            } else {
+                firstVideo = await ytdl.getInfo(searchString);
+                playqueue(firstVideo, message, Discord, serverQueue, voiceChannel);
+            }
         } catch {
             try {
                 messageCollectorMap.set(message.author.id, true);
@@ -140,7 +163,7 @@ async function music(message, args, client, Discord) {
         if (!serverQueue.playing) return messageEmbed("RED", `Music is already playing!`, message, Discord);
         serverQueue.playing = false;
         serverQueue.connection.dispatcher.pause();
-        messageEmbed("GREEN", `I have paused the music **[${serverQueue.songs[0].songauthor}](${serverQueue.songs[0].channel}) | [${serverQueue.songs[0].title}](${serverQueue.songs[0].url}** [<@!${serverQueue.songs[0].authorid}>])`, message, Discord);
+        messageEmbed("GREEN", `I have paused the music **[${serverQueue.songs[0].songauthor}](${serverQueue.songs[0].channel}) | [${serverQueue.songs[0].title}](${serverQueue.songs[0].url})** [<@!${serverQueue.songs[0].authorid}>]`, message, Discord);
     } else if (args[1] === "skip" || args[1] === "s") {
         serverQueue.connection.dispatcher.end();
         messageEmbed("GREEN", `I have skipped **[${serverQueue.songs[0].songauthor}](${serverQueue.songs[0].channel}) | [${serverQueue.songs[0].title}](${serverQueue.songs[0].url})** [<@!${serverQueue.songs[0].authorid}>]`, message, Discord);
@@ -148,9 +171,9 @@ async function music(message, args, client, Discord) {
         if (serverQueue.playing) return messageEmbed("RED", `Music is already playing!`, message, Discord);
         serverQueue.playing = true;
         serverQueue.connection.dispatcher.resume();
-        messageEmbed("GREEN", `Music resumed **[${serverQueue.songs[0].songauthor}](${serverQueue.songs[0].channel}) | [${serverQueue.songs[0].title}](${serverQueue.songs[0].url}** [<@!${serverQueue.songs[0].authorid}>])`, message, Discord);
+        messageEmbed("GREEN", `Music resumed **[${serverQueue.songs[0].songauthor}](${serverQueue.songs[0].channel}) | [${serverQueue.songs[0].title}](${serverQueue.songs[0].url})** [<@!${serverQueue.songs[0].authorid}>]`, message, Discord);
     } else if (args[1] === "disconnect" || args[1] === "d") {
-        serverQueue.connection.dispatcher.end();
+        // serverQueue.connection.dispatcher.end();
         serverQueue.voiceChannel.leave();
         queue.delete(message.guild.id);
         messageEmbed("GREEN", "Disconnected", message, Discord);
@@ -173,7 +196,14 @@ async function music(message, args, client, Discord) {
         serverQueue.songs = await serverQueue.songs.splice(args[2]-1, 1);
         await messageEmbed("GREEN", `You have successfully removed the song **[${song1.songauthor}](${song1.channel}) | [${song1.title}](${song1.url})**`, message, Discord);
         if (serverQueue.songs.length < 1) serverQueue.connection.dispatcher.end();
-    } 
+    } else if (args[1] === "savequeue" || args[1] === "sq") {
+        if (!args[2]) return messageEmbed("RED", "You must include what you want to name this playlist!", message, Discord);
+        let jsonqueue = [];
+        let plname = unlowerArgs.slice(1).join(" ");
+        for (i in serverQueue.songs) jsonqueue.push(serverQueue.songs[i].id);
+        return addDatabase(message, plname, JSON.stringify(jsonqueue));
+    } else if (args[1] === "savedplaylist" || args[1] === "sp") return returnPlaylists(message, Discord);
+    else if (args[1] === "deleteplaylist" || args[1] === "dp") return deletefrom(unlowerArgs[1], message);
     // else if (args[1] === "replace" || args[1] === "rep") {
     //     if (!args[2]) return messageEmbed("RED", "You must include a number!");
     //     if (isNaN(args[2]) || args[2] > serverQueue.songs.length || args[2] <= 0) return messageEmbed("RED", `'${args[2]}' is either not a number or bigger than the serverqueue or less than 0!`, message, Discord);
