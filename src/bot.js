@@ -3,11 +3,13 @@ const Discord = require('discord.js');
 const client = new Discord.Client({retryLimit: 10, shardCount: 3});
 
 const { music } = require('./music/music.js');
+const { cache } = require('./SQLQueries/queries');
 
 const prefix = process.env.PREFIX;
 const prefix2 = process.env.PREFIX2;
 
 client.on('ready', () => {
+    cache();
     console.log(`${client.user.tag} has logged in`);
 });
 
