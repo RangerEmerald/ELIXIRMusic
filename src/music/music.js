@@ -60,7 +60,7 @@ async function playqueue(firstVideo, message, Discord, serverQueue, voiceChannel
         authortag: message.member.user.tag
     }
 
-    if (!serverQueue || !serverQueue.songs.length) {
+    if (!serverQueue.songs.length) {
         serverQueue.textChannel = message.channel;
         serverQueue.voiceChannel = voiceChannel;
         serverQueue.playing = true;
@@ -141,7 +141,7 @@ async function music(message, args, client, Discord) {
     }
     
     //*Music affected Commands Under
-    if (args[1] == "play" || args[1] == "p" || args[1] == "pause" || args[1] == "paws" || args[1] == "resume" || args[1] == "res" || args[1] == "skip" || args[1] == "s" || args[1] == "disconnect" || args[1] == "d" || args[1] == "volume" || args[1] == "v" || args[1] == "loop" || args[1] == "l" || args[1] == "remove" || args[1] == "r" || args[1] == "antispam" || args[1] == "ap") {
+    else if (args[1] == "play" || args[1] == "p" || args[1] == "pause" || args[1] == "paws" || args[1] == "resume" || args[1] == "res" || args[1] == "skip" || args[1] == "s" || args[1] == "disconnect" || args[1] == "d" || args[1] == "volume" || args[1] == "v" || args[1] == "loop" || args[1] == "l" || args[1] == "remove" || args[1] == "r" || args[1] == "antispam" || args[1] == "ap") {
         if (serverQueue.playing && client.guilds.cache.get(message.guild.id).voice.channel.id != message.member.voice.channel.id && client.guilds.cache.get(message.guild.id).voice.channel.id) return messageEmbed(false, "RED", "You need to be in the same voice channel as me in order to use my commands!", message, Discord);
         else if ((args[1] == "resume" || args[1] == "res" || args[1] == "pause" || args[1] == "paws" || args[1] == "skip" || args[1] == "s") && !serverQueue.songs.length) return messageEmbed(false, "RED", "There is nothing playing right now!", message, Discord);
         switch (args[1]) {
