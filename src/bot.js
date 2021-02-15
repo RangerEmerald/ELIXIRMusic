@@ -24,9 +24,4 @@ client.on('message', message => {
     }
 });
 
-client.on('error', error => {
-    message.channel.send("There was an error in getting that command back to you.");
-    console.log(`An error has occured! --- ${error}`);
-});
-
 client.login(process.env.TOKEN);
