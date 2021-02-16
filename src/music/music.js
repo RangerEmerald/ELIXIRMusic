@@ -72,7 +72,6 @@ async function playqueue(firstVideo, message, Discord, serverQueue, voiceChannel
             play(message.guild, serverQueue.songs[0], message, Discord);
         } catch (err) {
             console.log(`There was an error connecting in a voice channel --- ${err}`);
-            queue.delete(message.guild.id);
             return messageEmbed(false, "RED", "There was an error in connecting to a voice channel", message, Discord);
         }
 
@@ -141,9 +140,9 @@ async function music(message, args, client, Discord) {
     }
     
     //*Music affected Commands Under
-    else if (args[1] == "play" || args[1] == "p" || args[1] == "pause" || args[1] == "paws" || args[1] == "resume" || args[1] == "res" || args[1] == "skip" || args[1] == "s" || args[1] == "disconnect" || args[1] == "d" || args[1] == "volume" || args[1] == "v" || args[1] == "loop" || args[1] == "l" || args[1] == "remove" || args[1] == "r" || args[1] == "antispam" || args[1] == "ap") {
-        if (serverQueue.playing && client.guilds.cache.get(message.guild.id).voice.channel.id != message.member.voice.channel.id && client.guilds.cache.get(message.guild.id).voice.channel.id) return messageEmbed(false, "RED", "You need to be in the same voice channel as me in order to use my commands!", message, Discord);
-        else if ((args[1] == "resume" || args[1] == "res" || args[1] == "pause" || args[1] == "paws" || args[1] == "skip" || args[1] == "s") && !serverQueue.songs.length) return messageEmbed(false, "RED", "There is nothing playing right now!", message, Discord);
+    else if (args[1] == "play" || args[1] == "p" || args[1] == "pause" || args[1] == "paws" || args[1] == "resume" || args[1] == "res" || args[1] == "skip" || args[1] == "s" || args[1] == "disconnect" || args[1] == "d" || args[1] == "volume" || args[1] == "v" || args[1] == "loop" || args[1] == "l" || args[1] == "remove" || args[1] == "r" || args[1] == "antispam" || args[1] == "ap" || args[1] == "deletequeue" || args[1] == "dq") {
+        if (serverQueue.playing && client.guilds.cache.get(message.guild.id).voice.channel && client.guilds.cache.get(message.guild.id).voice.channel.id != message.member.voice.channel.id) return messageEmbed(false, "RED", "You need to be in the same voice channel as me in order to use my commands!", message, Discord);
+        else if ((args[1] == "resume" || args[1] == "res" || args[1] == "pause" || args[1] == "paws" || args[1] == "skip" || args[1] == "s") && (!serverQueue.songs.length || (!serverQueue.connection || !serverQueue.connection.dispatcher))) return messageEmbed(false, "RED", "There is nothing playing right now!", message, Discord);
         switch (args[1]) {
             case "play":
             case "p":
@@ -270,6 +269,12 @@ async function music(message, args, client, Discord) {
                 else serverQueue.antispam = !serverQueue.antispam;
                 await messageEmbed(false, "GREEN", `You have set song antispam to \`${serverQueue.antispam}\`.`, message, Discord);
                 break; 
+            case "deletequeue":
+            case "dq":
+                serverQueue.songs = [];
+                if (serverQueue.connection.dispatcher) serverQueue.connection.dispatcher.end();
+                await messageEmbed(false, "GREEN", "I have deleted the queue", message, Discord);
+                break;
         }
     }
 
@@ -281,9 +286,8 @@ async function play(guild, song, message, Discord) {
     if (!song) {
         try {
             serverQueue.voiceChannel.leave();
-            queue.delete(guild.id);
             messageEmbed(false, "ORANGE", `Left voice channel for lack of queue`, message, Discord);
-        } catch (err) { }
+        } catch { }
         return;
     }
 
